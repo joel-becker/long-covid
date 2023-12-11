@@ -1,3 +1,9 @@
+import prepare
+
+collapsed_prevalence_diff = prepare.prepare_raw_data()
+
+
+
 import pandas as pd
 import matplotlib.pyplot as plt
 import matplotlib.ticker as ticker
@@ -12,7 +18,6 @@ cleaned_data = data_prevalence_and_symptoms[['symptomatic', 'cohort_period', 'sy
 
 # Group by symptom and cohort period
 grouped = cleaned_data.groupby(['symptom', 'cohort_period'])
-
 
 # Calculate prevalence differences for the first period (6 months)
 prevalence_diff_6m = grouped.apply(lambda x: x[x['symptomatic'] == 1]['percentage_1st_period'].mean() - x[x['symptomatic'] == 0]['percentage_1st_period'].mean()).reset_index(name='prevalence_diff_6m')
@@ -30,9 +35,6 @@ prevalence_diff = pd.merge(prevalence_diff_6m, prevalence_diff_2nd, on=['symptom
 # Ensure we keep the 12-month and 18-month cohorts separate
 prevalence_diff_separated = prevalence_diff.copy()
 
-# Print to verify
-print(prevalence_diff_separated.head())
-
 # Calculate the mean prevalence difference at 6 months for each symptom
 mean_prevalence_diff_6m = prevalence_diff_6m.groupby('symptom')['prevalence_diff_6m'].mean().reset_index()
 
@@ -43,10 +45,6 @@ prevalence_diff_separated = prevalence_diff_separated.merge(mean_prevalence_diff
 prevalence_diff_separated['prevalence_diff_6m'] = prevalence_diff_separated['prevalence_diff_6m_mean']
 prevalence_diff_separated.drop(columns=['prevalence_diff_6m_mean'], inplace=True)
 
-# Print to verify
-print(prevalence_diff_separated.head())
-
-
 # Create columns for 12 and 18 months prevalence differences
 prevalence_diff_separated['prevalence_diff_12m'] = prevalence_diff_separated.apply(
     lambda row: row['prevalence_diff_2nd'] if row['months_2nd_period'] == 12 else None, axis=1)
@@ -55,11 +53,6 @@ prevalence_diff_separated['prevalence_diff_18m'] = prevalence_diff_separated.app
 
 # Drop columns that are no longer needed
 prevalence_diff_separated.drop(columns=['cohort_period', 'months_2nd_period', 'prevalence_diff_2nd'], inplace=True)
-
-# Print to verify
-print(prevalence_diff_separated.head())
-
-
 
 # Collapse rows so each symptom has one row with 6, 12, and 18 months data
 collapsed_prevalence_diff = prevalence_diff_separated.groupby('symptom').agg({
