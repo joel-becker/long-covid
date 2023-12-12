@@ -1,131 +1,23 @@
-import prepare
+import prepare as prep
+import adjust_prevalence as ap
+import calculate_burden as cb
 import pandas as pd
 import matplotlib.pyplot as plt
 import matplotlib.ticker as ticker
 
 # Load data from CSV files
-collapsed_prevalence_diff = prepare.prepare_raw_data()
+prevalence_diff = prep.prepare_raw_data()
 data_daly = pd.read_csv('data/daly.csv')
 
-
-def conservative_adjustment(prevalence_data):
-    adjusted = prevalence_data.copy()
-
-    # Columns representing different time periods
-    col_6m = 'prevalence_diff_6m'
-    col_12m = 'prevalence_diff_12m'
-    col_18m = 'prevalence_diff_18m'
-
-    # First, adjust 18-month prevalence based on 12-month prevalence
-    adjusted[col_18m] = adjusted[[col_12m, col_18m]].min(axis=1)
-
-    # Then, adjust 12-month prevalence based on 6-month prevalence
-    adjusted[col_12m] = adjusted[[col_6m, col_12m]].min(axis=1)
-
-    # Re-adjust 18-month prevalence if necessary
-    adjusted[col_18m] = adjusted[[col_12m, col_18m]].min(axis=1)
-
-    return adjusted
-
-def moderate_adjustment(prevalence_data):
-    adjusted = prevalence_data.copy()
-
-    col_6m, col_12m, col_18m = 'prevalence_diff_6m', 'prevalence_diff_12m', 'prevalence_diff_18m'
-
-    # Create a mean of all three columns
-    adjusted['mean_all'] = adjusted[[col_6m, col_12m, col_18m]].mean(axis=1)
-
-    # Identify non-decreasing trends and adjust to the mean
-    is_non_decreasing = (adjusted[col_12m] >= adjusted[col_6m]) & (adjusted[col_18m] >= adjusted[col_12m])
-    adjusted.loc[is_non_decreasing, [col_6m, col_12m, col_18m]] = adjusted['mean_all']
-
-    # For remaining cases, ensure non-decreasing trend
-    adjusted['mean_12_18'] = adjusted[[col_12m, col_18m]].mean(axis=1)
-    adjusted.loc[adjusted[col_18m] >= adjusted[col_12m], [col_12m, col_18m]] = adjusted['mean_12_18']
-    adjusted['mean_6_12'] = adjusted[[col_6m, col_12m]].mean(axis=1)
-    adjusted.loc[adjusted[col_12m] >= adjusted[col_6m], [col_6m, col_12m]] = adjusted['mean_6_12']
-    adjusted.loc[adjusted[col_18m] > adjusted[col_12m], [col_6m, col_12m, col_18m]] = adjusted['mean_all']
-
-    # Drop the temporary mean columns
-    adjusted.drop(columns=['mean_all', 'mean_12_18', 'mean_6_12'], inplace=True)
-
-    return adjusted
-
-def merge_data(prevalence_data, severity_data):
-    return pd.merge(prevalence_data, severity_data, left_on='symptom', right_on='name_merge_data')
-
-
 # Adjusting the prevalence data
-prevalence_diff = collapsed_prevalence_diff
-conservative_prevalence_diff = conservative_adjustment(prevalence_diff)
-moderate_prevalence_diff = moderate_adjustment(prevalence_diff)
-adjusted_prevalence = conservative_adjustment(collapsed_prevalence_diff)  # or moderate_adjustment(collapsed_prevalence_diff)
+adjusted_prevalence = ap.adjust_prevalence_data(prevalence_diff, method='conservative')
 
-
-
-
+# Merging data
+merged_data = cb.merge_prevalence_severity(adjusted_prevalence, data_daly)
+merged_data = cb.calculate_period_burden(merged_data)
 
 # Define variables
 annual_cases = 19202639
-
-
-# Merging data
-merged_data = merge_data(adjusted_prevalence, data_daly)
-
-def calculate_period_burden(merged_data):
-    periods = ['6m', '12m', '18m']
-    time_ranges = {'6m': (2, 8), '12m': (8, 15), '18m': (15, 36)}
-
-    for period in periods:
-        start_month, end_month = time_ranges[period]
-        proportion_of_year = (end_month - start_month) / 12
-        prevalence_col = f'prevalence_diff_{period}'
-        burden_col = f'extra_burden_{period}'
-        merged_data[burden_col] = merged_data[prevalence_col] * merged_data['GHE2019'] * proportion_of_year
-
-    return merged_data
-
-def aggregate_burden(merged_data):
-    periods = ['6m', '12m', '18m']
-    total_burden = 0
-
-    for period in periods:
-        burden_col = f'extra_burden_{period}'
-        # Aggregate the burden for each period cumulatively
-        if period == '12m':
-            total_burden += merged_data[burden_col].sum() - merged_data['extra_burden_6m'].sum()
-        elif period == '18m':
-            total_burden += merged_data[burden_col].sum() - merged_data['extra_burden_12m'].sum()
-        else:
-            total_burden += merged_data[burden_col].sum()
-
-    return total_burden
-
-def calculate_severity_adjusted_burden(merged_data, severity_proportions, total_cases):
-    periods = ['6m', '12m', '18m']
-    severity_levels = ['mild', 'moderate', 'severe']
-    
-    # Initialize aggregate burden
-    aggregate_burden = 0
-
-    for period in periods:
-        burden_col = f'extra_burden_{period}'
-        
-        for severity in severity_levels:
-            # Calculate the burden for the severity level
-            severity_burden = merged_data[merged_data[severity] == 1][burden_col].sum()
-            
-            # Adjust based on severity proportions
-            severity_adjusted_burden = severity_burden * severity_proportions[severity]
-
-            # Aggregate the burden across the population
-            aggregate_burden += severity_adjusted_burden * total_cases
-
-    return aggregate_burden
-
-
-merged_data = calculate_period_burden(merged_data)
-total_burden = aggregate_burden(merged_data)
 
 severity_proportions_mild = {'mild': 1, 'moderate': 0, 'severe': 0}
 severity_proportions_moderate = {'mild': 0, 'moderate': 1, 'severe': 0}
@@ -134,12 +26,12 @@ severity_proportions_viv = {'mild': 0.9199, 'moderate': 0.0714, 'severe': 0.0088
 severity_proportions_raddad = {'mild': 0.9975, 'moderate': 0.0023, 'severe': 0.0002}
 severity_proportions_robinson = {'mild': 0.94, 'moderate': 0.047, 'severe': 0.013}
 
-total_burden_mild = calculate_severity_adjusted_burden(merged_data, severity_proportions_mild, annual_cases)
-total_burden_moderate = calculate_severity_adjusted_burden(merged_data, severity_proportions_moderate, annual_cases)
-total_burden_severe = calculate_severity_adjusted_burden(merged_data, severity_proportions_severe, annual_cases)
-total_burden_viv = calculate_severity_adjusted_burden(merged_data, severity_proportions_viv, annual_cases)
-total_burden_raddad = calculate_severity_adjusted_burden(merged_data, severity_proportions_raddad, annual_cases)
-total_burden_robinson = calculate_severity_adjusted_burden(merged_data, severity_proportions_robinson, annual_cases)
+total_burden_mild = cb.calculate_severity_adjusted_burden(merged_data, severity_proportions_mild, annual_cases)
+total_burden_moderate = cb.calculate_severity_adjusted_burden(merged_data, severity_proportions_moderate, annual_cases)
+total_burden_severe = cb.calculate_severity_adjusted_burden(merged_data, severity_proportions_severe, annual_cases)
+total_burden_viv = cb.calculate_severity_adjusted_burden(merged_data, severity_proportions_viv, annual_cases)
+total_burden_raddad = cb.calculate_severity_adjusted_burden(merged_data, severity_proportions_raddad, annual_cases)
+total_burden_robinson = cb.calculate_severity_adjusted_burden(merged_data, severity_proportions_robinson, annual_cases)
 
 print(f"Total burden assuming all cases are mild, moderate, or severe respectively: {total_burden_mild}, {total_burden_moderate}, {total_burden_severe}")
 print(f"Total burden following Viv's COVID severity proportions: {total_burden_viv}")
@@ -280,7 +172,7 @@ def plot_total_burden_under_different_severities(merged_data, severity_scenarios
 
     # Calculate total burden for each scenario
     for scenario in severity_scenarios:
-        total_burdens.append(calculate_severity_adjusted_burden(merged_data, severity_scenarios[scenario], total_cases))
+        total_burdens.append(cb.calculate_severity_adjusted_burden(merged_data, severity_scenarios[scenario], total_cases))
 
     # Plotting
     fig, ax = plt.subplots(figsize=(10, 6))
