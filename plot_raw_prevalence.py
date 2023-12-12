@@ -1,4 +1,3 @@
-import calculate_burden as cb
 import matplotlib.pyplot as plt
 import pandas as pd
 import matplotlib.ticker as ticker

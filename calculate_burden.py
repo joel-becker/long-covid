@@ -11,7 +11,7 @@ def merge_prevalence_severity(prevalence_data, severity_data):
     Returns:
     pd.DataFrame: Merged data.
     """
-    return pd.merge(prevalence_data, severity_data, left_on='symptom', right_on='name_merge_data')
+    return pd.merge(prevalence_data, severity_data, left_on='symptom', right_on='symptom')
 
 def calculate_period_burden(merged_data):
     """
@@ -29,7 +29,7 @@ def calculate_period_burden(merged_data):
         proportion_of_year = (end_month - start_month) / 12
         prevalence_col = f'prevalence_diff_{period}'
         burden_col = f'extra_burden_{period}'
-        merged_data[burden_col] = merged_data[prevalence_col] * merged_data['GHE2019'] * proportion_of_year
+        merged_data[burden_col] = merged_data[prevalence_col] * merged_data['daly_adjustment'] * proportion_of_year
 
     return merged_data
 
