@@ -1,5 +1,3 @@
-import pandas as pd
-
 def adjust_prevalence_data(prevalence_data, method='conservative'):
     """
     Adjusts the prevalence data based on the chosen method.
@@ -23,28 +21,13 @@ def adjust_prevalence_data(prevalence_data, method='conservative'):
 
     return adjusted
 
+
 def _conservative_adjustment(data, col_6m, col_12m, col_18m):
     # Adjust 18-month based on 12-month, then adjust 12-month based on 6-month, and re-adjust 18-month
     for col_higher, col_lower in [(col_18m, col_12m), (col_12m, col_6m), (col_18m, col_12m)]:
         data[col_higher] = data[[col_lower, col_higher]].min(axis=1)
     return data
 
-def _moderate_adjustment(data, col_6m, col_12m, col_18m):
-    # Create a mean of all three columns and adjust non-decreasing trends
-    data['mean_all'] = data[[col_6m, col_12m, col_18m]].mean(axis=1)
-
-    # Identify non-decreasing trends and adjust to the mean
-    is_non_decreasing = (data[col_12m] >= data[col_6m]) & (data[col_18m] >= data[col_12m])
-    data.loc[is_non_decreasing, [col_6m, col_12m, col_18m]] = data['mean_all']
-
-    # Ensure non-decreasing trend for remaining cases
-    for pair in [(col_12m, col_18m), (col_6m, col_12m)]:
-        mean_col = f'mean_{"_".join(pair)}'
-        data[mean_col] = data[pair].mean(axis=1)
-        data.loc[data[pair[1]] >= data[pair[0]], pair] = data[mean_col]
-
-    data.drop(columns=['mean_all', 'mean_12_18', 'mean_6_12'], inplace=True)
-    return data
 
 def _moderate_adjustment(data, col_6m, col_12m, col_18m):
     # Create a mean of all three columns and adjust non-decreasing trends
