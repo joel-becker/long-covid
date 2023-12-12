@@ -1,72 +1,11 @@
 import prepare
-
-collapsed_prevalence_diff = prepare.prepare_raw_data()
-
-
-
 import pandas as pd
 import matplotlib.pyplot as plt
 import matplotlib.ticker as ticker
-import numpy as np
 
 # Load data from CSV files
-data_prevalence_and_symptoms = pd.read_csv('data/prevalence_and_symptoms.csv')
+collapsed_prevalence_diff = prepare.prepare_raw_data()
 data_daly = pd.read_csv('data/daly.csv')
-
-# Subset relevant columns and remove NA values
-cleaned_data = data_prevalence_and_symptoms[['symptomatic', 'cohort_period', 'symptom', 'percentage_1st_period', 'percentage_2nd_period']].dropna()
-
-# Group by symptom and cohort period
-grouped = cleaned_data.groupby(['symptom', 'cohort_period'])
-
-# Calculate prevalence differences for the first period (6 months)
-prevalence_diff_6m = grouped.apply(lambda x: x[x['symptomatic'] == 1]['percentage_1st_period'].mean() - x[x['symptomatic'] == 0]['percentage_1st_period'].mean()).reset_index(name='prevalence_diff_6m')
-
-# Calculate prevalence differences for the second period (12 or 18 months)
-prevalence_diff_2nd = grouped.apply(lambda x: x[x['symptomatic'] == 1]['percentage_2nd_period'].mean() - x[x['symptomatic'] == 0]['percentage_2nd_period'].mean()).reset_index(name='prevalence_diff_2nd')
-
-# Add a column to determine the second period's duration based on the cohort period string
-prevalence_diff_6m['months_2nd_period'] = prevalence_diff_6m['cohort_period'].apply(lambda x: 18 if '18' in x else 12)
-prevalence_diff_2nd['months_2nd_period'] = prevalence_diff_2nd['cohort_period'].apply(lambda x: 18 if '18' in x else 12)
-
-# Merge the dataframes
-prevalence_diff = pd.merge(prevalence_diff_6m, prevalence_diff_2nd, on=['symptom', 'cohort_period', 'months_2nd_period'])
-
-# Ensure we keep the 12-month and 18-month cohorts separate
-prevalence_diff_separated = prevalence_diff.copy()
-
-# Calculate the mean prevalence difference at 6 months for each symptom
-mean_prevalence_diff_6m = prevalence_diff_6m.groupby('symptom')['prevalence_diff_6m'].mean().reset_index()
-
-# Update the original dataframe with these mean values
-prevalence_diff_separated = prevalence_diff_separated.merge(mean_prevalence_diff_6m, on='symptom', suffixes=('', '_mean'))
-
-# Replace the original 6-month prevalence differences with the mean values
-prevalence_diff_separated['prevalence_diff_6m'] = prevalence_diff_separated['prevalence_diff_6m_mean']
-prevalence_diff_separated.drop(columns=['prevalence_diff_6m_mean'], inplace=True)
-
-# Create columns for 12 and 18 months prevalence differences
-prevalence_diff_separated['prevalence_diff_12m'] = prevalence_diff_separated.apply(
-    lambda row: row['prevalence_diff_2nd'] if row['months_2nd_period'] == 12 else None, axis=1)
-prevalence_diff_separated['prevalence_diff_18m'] = prevalence_diff_separated.apply(
-    lambda row: row['prevalence_diff_2nd'] if row['months_2nd_period'] == 18 else None, axis=1)
-
-# Drop columns that are no longer needed
-prevalence_diff_separated.drop(columns=['cohort_period', 'months_2nd_period', 'prevalence_diff_2nd'], inplace=True)
-
-# Collapse rows so each symptom has one row with 6, 12, and 18 months data
-collapsed_prevalence_diff = prevalence_diff_separated.groupby('symptom').agg({
-    'prevalence_diff_6m': 'first',
-    'prevalence_diff_12m': 'first',
-    'prevalence_diff_18m': 'first'
-}).reset_index()
-
-# Print to verify
-print(collapsed_prevalence_diff.head())
-
-
-
-
 
 
 def conservative_adjustment(prevalence_data):
@@ -115,18 +54,6 @@ def moderate_adjustment(prevalence_data):
 def merge_data(prevalence_data, severity_data):
     return pd.merge(prevalence_data, severity_data, left_on='symptom', right_on='name_merge_data')
 
-def calculate_burden(merged_data, severity, annual_cases, us_population):
-    # Filter data by severity
-    merged_data = merged_data[merged_data[severity] == 1]
-
-    # Calculate the burden
-    merged_data['extra_burden'] = merged_data['adjusted_prevalence'] * merged_data['GHE2019']
-    merged_data['us_scaled_burden'] = merged_data['extra_burden'] * (annual_cases / us_population)
-
-    # Sum up the total burden
-    total_burden = merged_data.groupby('symptom')['us_scaled_burden'].sum()
-
-    return total_burden
 
 # Adjusting the prevalence data
 prevalence_diff = collapsed_prevalence_diff
