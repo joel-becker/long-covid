@@ -38,12 +38,16 @@ def _moderate_adjustment(data, col_6m, col_12m, col_18m):
     # Ensure non-decreasing trend for remaining cases
     for pair in [(col_12m, col_18m), (col_6m, col_12m)]:
         mean_col = f'mean_{"_".join(pair)}'
-        data[mean_col] = data[pair].mean(axis=1)
+        data[mean_col] = data[list(pair)].mean(axis=1)
         data.loc[data[pair[1]] >= data[pair[0]], pair] = data[mean_col]
 
     # Re-check and adjust for non-decreasing trend between 12 and 18 months
     data.loc[data[col_18m] > data[col_12m], [col_6m, col_12m, col_18m]] = data['mean_all']
 
     # Drop the temporary mean columns
-    data.drop(columns=['mean_all', 'mean_12_18', 'mean_6_12'], inplace=True)
+    data.drop(columns=[
+        'mean_all', 
+        'mean_prevalence_diff_12m_prevalence_diff_18m', 
+        'mean_prevalence_diff_6m_prevalence_diff_12m'
+        ], inplace=True)
     return data

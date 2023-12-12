@@ -39,7 +39,7 @@ def plot_symptom_prevalence(merged_data, title_suffix=''):
     # Show the plot
     plt.show()
 
-def plot_prevalence_across_scenarios(scenarios):
+def plot_symptoms_prevalence_across_scenarios(scenarios):
     # Define the periods and corresponding months
     periods_months = {'6m': (2, 8), '12m': (8, 15), '18m': (15, 36)}
     
@@ -77,10 +77,10 @@ def plot_prevalence_across_scenarios(scenarios):
     plt.tight_layout()
     plt.show()
 
-def plot_total_burden(merged_data, severity_scenarios, total_cases):
+def plot_total_burden_under_different_severities(severity_scenarios, total_burdens):
     fig, ax = plt.subplots(figsize=(10, 6))
     ax.bar(severity_scenarios.keys(), total_burdens, color='skyblue')
-    _style_plot(ax, title='Total Burden Under Different Severity Scenarios', xlabel='Severity Scenarios', ylabel='Total DALYs Lost')
+    _style_plot(title='Total Burden Under Different Severity Scenarios', xlabel='Severity Scenarios', ylabel='Total DALYs Lost')
     
     for spine in ['top', 'right', 'bottom', 'left']:
         ax.spines[spine].set_visible(False)
@@ -92,48 +92,43 @@ def plot_total_burden(merged_data, severity_scenarios, total_cases):
     plt.tight_layout()
     plt.show()
 
-def plot_burden_by_symptom(merged_data, scenarios, prevalence_methods, total_cases):
+def plot_symptom_burden_by_scenarios(adjustment_scenarios, severity_scenarios, total_cases):
     max_burden = 0
 
-    # Pre-calculate maximum burden for consistent x-axis
-    for proportions in scenarios.values():
-        for method in prevalence_methods:
-            adjusted_data = method(merged_data)
-            burdens = calculate_weighted_burden_by_symptom(adjusted_data, proportions, total_cases)
+    # Calculate the maximum burden for consistent x-axis scaling
+    for adj_name, adj_data in adjustment_scenarios.items():
+        for sev_name, sev_props in severity_scenarios.items():
+            burdens = calculate_weighted_burden_by_symptom(adj_data, sev_props, total_cases)
             max_burden = max(max_burden, max(burdens.values()))
 
-    fig, axes = plt.subplots(len(scenarios), len(prevalence_methods), figsize=(12, 6 * len(scenarios)), sharex=True, sharey=True)
-    
-    for i, (scenario_name, proportions) in enumerate(scenarios.items()):
-        for j, method in enumerate(prevalence_methods):
-            adjusted_data = method(merged_data)
-            burdens = calculate_weighted_burden_by_symptom(adjusted_data, proportions, total_cases)
-            ax = axes[i][j] if len(scenarios) > 1 else axes[j]
-            
-            # Create DataFrame for plotting
+    fig, axes = plt.subplots(len(severity_scenarios), len(adjustment_scenarios), figsize=(12, 6 * len(severity_scenarios)), sharex=True, sharey=True)
+
+    for i, (sev_name, sev_props) in enumerate(severity_scenarios.items()):
+        for j, (adj_name, adj_data) in enumerate(adjustment_scenarios.items()):
+            ax = axes[i][j] if len(severity_scenarios) > 1 else axes[j]
+            burdens = calculate_weighted_burden_by_symptom(adj_data, sev_props, total_cases)
+
             plot_data = pd.DataFrame(list(burdens.items()), columns=['Symptom', 'Burden']).sort_values(by='Burden', ascending=False)
-            
-            # Plotting
             ax.barh(plot_data['Symptom'], plot_data['Burden'], color='skyblue')
             ax.set_xlim(0, max_burden * 1.1)
 
-            # Setting up titles and axis labels
             if j == 0:
                 ax.set_ylabel('Symptoms')
-            if i == len(scenarios) - 1:
+            if i == len(severity_scenarios) - 1:
                 ax.set_xlabel('Total Burden (DALYs)')
-            ax.set_title(f'{scenario_name}, {method.__name__}')
-            _style_subplot(ax, show_spines=False, show_grid=False)
+            ax.set_title(f'{sev_name}, {adj_name}')
+            _style_subplot(ax, f'{sev_name}, {adj_name}', show_spines=False, show_grid=False)
     
     plt.tight_layout()
     plt.show()
 
-def _style_plot(ax=None, title='', xlabel='', ylabel=''):
+
+def _style_plot(title='', xlabel='', ylabel=''):
     plt.title(title)
     plt.xlabel(xlabel)
     plt.ylabel(ylabel)
     plt.grid(True, alpha=0.3)
-    _hide_spines(ax)
+    _hide_spines()
 
 def _style_subplot(ax, title='', xlabel='', show_spines=True, show_grid=True):
     ax.set_title(title)
@@ -142,7 +137,9 @@ def _style_subplot(ax, title='', xlabel='', show_spines=True, show_grid=True):
     if not show_spines:
         _hide_spines(ax)
 
-def _hide_spines(ax):
+def _hide_spines(ax=None):
+    if ax is None:
+        ax = plt.gca()
     for spine in ['top', 'right', 'bottom', 'left']:
         ax.spines[spine].set_visible(False)
 
